@@ -2,21 +2,30 @@ import { Box, Text, TextField, Image, Button } from "@skynexui/components";
 import React from "react";
 import appConfig from "../config.json";
 import { createClient } from "@supabase/supabase-js";
+import { useRouter } from "next/router";
+import { ButtonSendSticker } from "../src/components/ButtonSendSticker";
 
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlhdCI6MTY0MzQ4NTcyNywiZXhwIjoxOTU5MDYxNzI3fQ.TEXpLqXqF6XRdqCN6dZzST4zr9oWCg0LuWYsa8Re_B4";
 const SUPABASE_URL = "https://alwnzyoigevylwvtblmq.supabase.co";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+function configurarMensagensTempoReal(adicionaMensagem) {
+  return supabase
+    .from("mensagens")
+    .on("INSERT", (novaMensagem) => {
+      adicionaMensagem(novaMensagem.new);
+    })
+    .subscribe();
+}
+
 export default function ChatPage() {
+  const roteamento = useRouter();
+  const userLogged = roteamento.query.username;
   const [mensagem, setMensagem] = React.useState("");
   const [listaMensagem, setListaMensagem] = React.useState([]);
 
   React.useEffect(() => {
-    getMensagens();
-  });
-
-  function getMensagens() {
     supabase
       .from("mensagens")
       .select("*")
@@ -24,20 +33,28 @@ export default function ChatPage() {
       .then(({ data }) => {
         setListaMensagem(data);
       });
-  }
+
+    const subscription = configurarMensagensTempoReal((novaMensagem) => {
+      setListaMensagem((listaAtual) => {
+        return [novaMensagem, ...listaAtual];
+      });
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   function createMensagem(mensagem) {
     supabase
       .from("mensagens")
       .insert([mensagem])
-      .then(({ data }) => {
-        setListaMensagem([data[0], ...listaMensagem]);
-      });
+      .then(({ data }) => {});
   }
 
   function manipularMensagem(novaMensagem) {
     const mensagem = {
-      de: "DanielKoga",
+      de: `${userLogged}`,
       texto: novaMensagem,
     };
     createMensagem(mensagem);
@@ -118,9 +135,14 @@ export default function ChatPage() {
                 resize: "none",
                 borderRadius: "5px",
                 padding: "6px 8px",
-                backgroundColor: appConfig.theme.colors.neutrals[800],
+                backgroundColor: appConfig.theme.colors.neutrals["200"],
                 marginRight: "12px",
-                color: appConfig.theme.colors.neutrals[200],
+                color: appConfig.theme.colors.neutrals["500"],
+              }}
+            />
+            <ButtonSendSticker
+              onStickerClick={(sticker) => {
+                manipularMensagem(`:sticker: ${sticker}`);
               }}
             />
           </Box>
@@ -208,7 +230,11 @@ function MessageList(props) {
                 {new Date(mensagem.criado_em).toLocaleString()}
               </Text>
             </Box>
-            {mensagem.texto}
+            {mensagem.texto.startsWith(":sticker:") ? (
+              <Image src={mensagem.texto.replace(":sticker:", "")}></Image>
+            ) : (
+              mensagem.texto
+            )}
           </Text>
         );
       })}
